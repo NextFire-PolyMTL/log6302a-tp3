@@ -3,14 +3,16 @@ from collections.abc import Generator, Sequence
 from contextlib import suppress
 from typing import Callable
 
-from code_analysis import CFG, CFGReader
+from code_analysis import CFG
 
 PatternCheck = Callable[[CFG, int], bool]
 
 
 class DefinitelyPTFA(ABC):
-    def __init__(self, cfg: CFG):
-        self.cfg = cfg
+    def __init__(self, check_pattern: PatternCheck):
+        self.check_pattern = check_pattern
+
+        self.cfg: CFG
         self.visited: set[int]
         self.worklist: list[int]
         self.in_dict: dict[int, bool]
@@ -21,7 +23,7 @@ class DefinitelyPTFA(ABC):
         ...
 
     @abstractmethod
-    def check_node(self, nid: int, check_pattern: PatternCheck) -> None:
+    def check_node(self, nid: int) -> None:
         ...
 
     @abstractmethod
@@ -36,9 +38,9 @@ class DefinitelyPTFA(ABC):
     def propagate(self, nid: int, next_nid: int):
         ...
 
-    def __call__(
-        self, check_pattern: PatternCheck
-    ) -> tuple[dict[int, bool], dict[int, bool]]:
+    def __call__(self, cfg: CFG) -> tuple[dict[int, bool], dict[int, bool]]:
+        self.cfg = cfg
+
         self.visited = set()
         self.worklist = []
 
@@ -49,7 +51,7 @@ class DefinitelyPTFA(ABC):
         for _ in self.pre_loop_init():
             with suppress(IndexError):
                 while nid := self.worklist.pop():
-                    self.check_node(nid, check_pattern)
+                    self.check_node(nid)
                     for next_nid in self.next_nodes(nid):
                         if (
                             self.can_propagate(nid, next_nid)
@@ -76,8 +78,8 @@ class DefinitelyReachablePTFA(DefinitelyPTFA):
             self.worklist.append(exit_nid)
             yield
 
-    def check_node(self, nid: int, check_pattern: PatternCheck) -> None:
-        self.in_dict[nid] = self.out_dict[nid] or check_pattern(self.cfg, nid)
+    def check_node(self, nid: int) -> None:
+        self.in_dict[nid] = self.out_dict[nid] or self.check_pattern(self.cfg, nid)
 
     def next_nodes(self, nid: int) -> Sequence[int]:
         return self.cfg.get_any_parents(nid)
@@ -103,8 +105,8 @@ class DefinitelyReachingPTFA(DefinitelyPTFA):
             self.worklist.append(entry_nid)
             yield
 
-    def check_node(self, nid: int, check_pattern: PatternCheck) -> None:
-        self.out_dict[nid] = self.in_dict[nid] or check_pattern(self.cfg, nid)
+    def check_node(self, nid: int) -> None:
+        self.out_dict[nid] = self.in_dict[nid] or self.check_pattern(self.cfg, nid)
 
     def next_nodes(self, nid: int) -> Sequence[int]:
         return self.cfg.get_any_children(nid)
@@ -114,14 +116,3 @@ class DefinitelyReachingPTFA(DefinitelyPTFA):
 
     def propagate(self, nid: int, next_nid: int) -> None:
         self.in_dict[next_nid] = self.out_dict[nid]
-
-
-def check_pattern(cfg: CFG, nid: int) -> bool:
-    return cfg.get_type(nid) == "Pattern"
-
-
-if __name__ == "__main__":
-    cfg_reader = CFGReader()
-    cfg = cfg_reader.read_cfg("tp/perf/graph1.cfg.json")
-    ptfa = DefinitelyReachablePTFA(cfg)
-    print(ptfa(check_pattern))
