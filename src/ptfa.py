@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Sequence
+from collections.abc import Iterable
 from typing import Callable
 
 from code_analysis import CFG
@@ -18,7 +18,7 @@ class DefinitelyPTFA(ABC):
         self.out_dict: dict[int, bool]
 
     @abstractmethod
-    def pre_loop_init(self) -> Generator[None, None, None]:
+    def pre_loop_init(self) -> Iterable[None]:
         ...
 
     @abstractmethod
@@ -26,7 +26,7 @@ class DefinitelyPTFA(ABC):
         ...
 
     @abstractmethod
-    def next_nodes(self, nid: int) -> Sequence[int]:
+    def next_nodes(self, nid: int) -> Iterable[int]:
         ...
 
     @abstractmethod
@@ -64,13 +64,13 @@ class DefinitelyPTFA(ABC):
 
 
 class DefinitelyReachablePTFA(DefinitelyPTFA):
-    def get_exit_node(self) -> Generator[int, None, None]:
+    def get_exit_node(self) -> Iterable[int]:
         node_ids = self.cfg.get_node_ids()
         for nid in node_ids:
             if self.cfg.get_type(nid) == "Exit":
                 yield nid
 
-    def pre_loop_init(self) -> Generator[None, None, None]:
+    def pre_loop_init(self) -> Iterable[None]:
         for exit_nid in self.get_exit_node():
             self.out_dict[exit_nid] = False
             self.visited.add(exit_nid)
@@ -80,7 +80,7 @@ class DefinitelyReachablePTFA(DefinitelyPTFA):
     def check_node(self, nid: int) -> None:
         self.in_dict[nid] = self.out_dict[nid] or self.check_pattern(self.cfg, nid)
 
-    def next_nodes(self, nid: int) -> Sequence[int]:
+    def next_nodes(self, nid: int) -> Iterable[int]:
         return self.cfg.get_any_parents(nid)
 
     def can_propagate(self, nid: int, next_nid: int) -> bool:
@@ -91,13 +91,13 @@ class DefinitelyReachablePTFA(DefinitelyPTFA):
 
 
 class DefinitelyReachingPTFA(DefinitelyPTFA):
-    def get_entry_node(self) -> Generator[int, None, None]:
+    def get_entry_node(self) -> Iterable[int]:
         node_ids = self.cfg.get_node_ids()
         for nid in node_ids:
             if self.cfg.get_type(nid) == "Entry":
                 yield nid
 
-    def pre_loop_init(self) -> Generator[None, None, None]:
+    def pre_loop_init(self) -> Iterable[None]:
         for entry_nid in self.get_entry_node():
             self.in_dict[entry_nid] = False
             self.visited.add(entry_nid)
@@ -107,7 +107,7 @@ class DefinitelyReachingPTFA(DefinitelyPTFA):
     def check_node(self, nid: int) -> None:
         self.out_dict[nid] = self.in_dict[nid] or self.check_pattern(self.cfg, nid)
 
-    def next_nodes(self, nid: int) -> Sequence[int]:
+    def next_nodes(self, nid: int) -> Iterable[int]:
         return self.cfg.get_any_children(nid)
 
     def can_propagate(self, nid: int, next_nid: int) -> bool:
