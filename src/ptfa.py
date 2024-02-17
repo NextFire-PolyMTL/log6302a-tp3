@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
-from contextlib import suppress
 from typing import Callable
 
 from code_analysis import CFG
@@ -49,17 +48,17 @@ class DefinitelyPTFA(ABC):
         self.out_dict = {k: True for k in node_ids}
 
         for _ in self.pre_loop_init():
-            with suppress(IndexError):
-                while nid := self.worklist.pop():
-                    self.check_node(nid)
-                    for next_nid in self.next_nodes(nid):
-                        if (
-                            self.can_propagate(nid, next_nid)
-                            or next_nid not in self.visited
-                        ):
-                            self.propagate(nid, next_nid)
-                            self.worklist.append(next_nid)
-                            self.visited.add(next_nid)
+            while self.worklist:
+                nid = self.worklist.pop()
+                self.check_node(nid)
+                for next_nid in self.next_nodes(nid):
+                    if (
+                        self.can_propagate(nid, next_nid)
+                        or next_nid not in self.visited
+                    ):
+                        self.propagate(nid, next_nid)
+                        self.worklist.append(next_nid)
+                        self.visited.add(next_nid)
 
         return self.in_dict, self.out_dict
 
